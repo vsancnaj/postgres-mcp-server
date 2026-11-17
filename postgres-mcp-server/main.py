@@ -25,14 +25,36 @@ DB_CONFIG = {
 #  - Run the query against the Postgres database
 #  - Return the rows as a list of dictionaries (column_name → value)
 # Hint: Use the same psycopg2 connection pattern shown in `get_schema`.
-
+@mcp.tool()
+async def execute_sql(query: str) -> List[Dict]:
+    """Execute a SQL query and return the results."""
+    with psycopg2.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            if cur.description is None:  # INSERT/UPDATE/DELETE: no rows back
+                return [{"rows_affected": cur.rowcount}]
+            columns = [d[0] for d in cur.description]
+            return [dict(zip(columns, row)) for row in cur.fetchall()]
 
 # TODO: Implement a third MCP tool called `list_tables`
 # This function should:
 #  - Take no inputs
 #  - Return the list of table names available in the current database
 # Hint: Query `information_schema.tables` and filter for `table_schema = 'public'`.
-
+@mcp.tool()
+async def list_tables() -> List[str]:
+    """Return the list of table names available in the current database."""
+    sql = """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+    """
+    with psycopg2.connect(**DB_CONFIG) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            rows = [r[0] for r in cur.fetchall()]
+    return rows
+    
 @mcp.tool()
 async def get_schema(table: str) -> List[Dict]:
     """Return column names and types for a given table."""

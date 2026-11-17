@@ -64,7 +64,13 @@ Press `Ctrl+C` to stop. No errors = working correctly.
 
 ## Available Tools
 
-**`get_schema()`** - Get database schema
+**`list_tables()`** - List the tables in the public schema
+
+**`get_schema(table)`** - Get column names and types for one table
+
+**`execute_sql(query)`** - Run any SQL. Queries that return rows give a list of `{column_name: value}`. INSERT, UPDATE and DELETE give `[{"rows_affected": N}]`. It runs whatever it is sent, so use a practice database or a read-only user.
+
+After you add or change a tool in `main.py`, reconnect the server: open `/mcp` in Claude Code, pick `postgres`, then Reconnect. A running server keeps its old tool list.
 
 ## Connect to Claude Code
 
@@ -75,21 +81,37 @@ Add a file named `.mcp.json` at the root of the project you want to use it from 
   "mcpServers": {
     "postgres": {
       "command": "poetry",
-      "args": ["-C", "/absolute/path/to/postgres-mcp-server", "run", "python", "postgres-mcp-server/main.py"]
+      "args": ["-C", "/absolute/path/to/postgres-mcp-server", "run", "python", "/absolute/path/to/postgres-mcp-server/postgres-mcp-server/main.py"]
     }
   }
 }
 ```
 
-Replace `/absolute/path/to/postgres-mcp-server` with your actual project path.
+Replace both `/absolute/path/to/postgres-mcp-server` values with your actual project path. Use the full path to `main.py` too. A relative path only works when you start `claude` inside this folder.
 
-Or register it from the terminal instead:
+Or register it from the terminal instead. Run this as one line (see Troubleshooting if it wraps):
 
 ```bash
-claude mcp add --transport stdio postgres -- poetry -C /absolute/path/to/postgres-mcp-server run python postgres-mcp-server/main.py
+claude mcp add --scope user --transport stdio postgres -- poetry -C /absolute/path/to/postgres-mcp-server run python /absolute/path/to/postgres-mcp-server/postgres-mcp-server/main.py
 ```
 
-Then start `claude` and ask it to list the tables; the `get_schema` tool should appear under the server's tools.
+Then start `claude` and ask it to list the tables. The three tools should appear under the server's tools.
+
+## Troubleshooting: "Connection closed" in /mcp
+
+Three setup problems caused this, one after another. Check them in order.
+
+1. **A long command wrapped when pasted.** The terminal splits it, and the saved command ends early (for example at `run python`). Run `claude mcp get postgres` and check that the Args line ends with the full path to `main.py`. If not, run `claude mcp remove postgres --scope user`, then add it again as one line.
+2. **Packages are not installed.** Error: `ModuleNotFoundError: No module named 'psycopg2'`. Fix: run `poetry install` in this folder.
+3. **Relative path to `main.py`.** Error: `can't open file '.../postgres-mcp-server/main.py'`. `poetry -C` does not change the folder Python looks in. Use the full path to `main.py`.
+
+`claude mcp get` can say Connected while the server is still broken. To really test it, start the server and ask for the tool list:
+
+```bash
+cd /tmp && printf '%s\n%s\n%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | poetry -C /absolute/path/to/postgres-mcp-server run python /absolute/path/to/postgres-mcp-server/postgres-mcp-server/main.py
+```
+
+You should see `list_tables`, `get_schema` and `execute_sql` in the output. Running it from `/tmp` proves the path works from any folder.
 
 ---
 
